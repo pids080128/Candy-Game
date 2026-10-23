@@ -1,2 +1,1285 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <title>Candy Crush Quest / Sweet Match Mania</title>
 
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+
+  <!-- Font Awesome Icons -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+  <!-- Canvas Confetti -->
+  <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
+
+  <!-- Google Fonts -->
+  <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600;700&family=Mali:wght@600;700&display=swap" rel="stylesheet">
+
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: {
+            candy: ['Fredoka', 'sans-serif'],
+            title: ['Mali', 'cursive']
+          },
+          colors: {
+            candyPink: '#FF6B9B',
+            candyPurple: '#9A4BFF',
+            candyYellow: '#FFD034',
+            candyCyan: '#00E5FF',
+            candyGreen: '#39E07A',
+            candyOrange: '#FF8800',
+            bgDark: '#2C1338',
+            panelBg: 'rgba(255, 255, 255, 0.2)'
+          },
+          boxShadow: {
+            candy: '0 8px 0 rgba(0, 0, 0, 0.25), inset 0 2px 4px rgba(255, 255, 255, 0.6)',
+            glow: '0 0 20px rgba(255, 107, 155, 0.6)',
+            innerGlow: 'inset 0 2px 6px rgba(255, 255, 255, 0.8)'
+          }
+        }
+      }
+    }
+  </script>
+
+  <style>
+    body {
+      font-family: 'Fredoka', sans-serif;
+      background: radial-gradient(circle at center, #571C6A 0%, #200829 100%);
+      user-select: none;
+      -webkit-user-select: none;
+      touch-action: manipulation;
+      overflow-x: hidden;
+    }
+
+    /* Floating Candy Bubbles Animation */
+    .bg-bubble {
+      position: absolute;
+      border-radius: 50%;
+      background: rgba(255, 255, 255, 0.08);
+      animation: floatUp 12s infinite linear;
+      pointer-events: none;
+    }
+
+    @keyframes floatUp {
+      0% { transform: translateY(105vh) scale(0.5); opacity: 0; }
+      20% { opacity: 0.6; }
+      100% { transform: translateY(-10vh) scale(1.2); opacity: 0; }
+    }
+
+    /* Glassmorphism panel */
+    .candy-glass {
+      background: rgba(255, 255, 255, 0.15);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      border: 3px solid rgba(255, 255, 255, 0.3);
+      box-shadow: 0 12px 32px 0 rgba(31, 38, 135, 0.37);
+    }
+
+    /* Glossy Button Style */
+    .btn-candy {
+      position: relative;
+      transition: all 0.15s ease;
+      box-shadow: 0 6px 0 rgba(0,0,0,0.3), inset 0 3px 2px rgba(255,255,255,0.5);
+    }
+    .btn-candy:active:not(:disabled) {
+      transform: translateY(4px);
+      box-shadow: 0 2px 0 rgba(0,0,0,0.3), inset 0 2px 2px rgba(255,255,255,0.5);
+    }
+    .btn-candy:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+      filter: grayscale(0.8);
+    }
+
+    /* Game Board Grid */
+    #board {
+      display: grid;
+      grid-template-columns: repeat(8, 1fr);
+      grid-template-rows: repeat(8, 1fr);
+      gap: 6px;
+      aspect-ratio: 1 / 1;
+      width: 100%;
+      max-width: 480px;
+      padding: 10px;
+      border-radius: 24px;
+      background: rgba(20, 8, 30, 0.6);
+      border: 4px solid rgba(255, 255, 255, 0.2);
+      box-shadow: inset 0 0 20px rgba(0, 0, 0, 0.6);
+    }
+
+    /* Tile Animations */
+    .tile {
+      position: relative;
+      border-radius: 16px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: transform 0.18s cubic-bezier(0.175, 0.885, 0.32, 1.275), background-color 0.2s ease, box-shadow 0.2s ease;
+      box-shadow: inset 0 3px 3px rgba(255, 255, 255, 0.6), 0 4px 6px rgba(0, 0, 0, 0.3);
+    }
+
+    .tile.selected {
+      transform: scale(1.12);
+      z-index: 20;
+      box-shadow: 0 0 20px #FFD034, inset 0 0 10px #FFF;
+      animation: pulseGlow 1s infinite alternate;
+    }
+
+    @keyframes pulseGlow {
+      0% { box-shadow: 0 0 12px #FFD034; }
+      100% { box-shadow: 0 0 24px #FFD034, 0 0 30px #FF6B9B; }
+    }
+
+    .tile.match-pop {
+      animation: popOut 0.3s forwards ease-in;
+    }
+
+    @keyframes popOut {
+      0% { transform: scale(1); opacity: 1; }
+      50% { transform: scale(1.3) rotate(10deg); opacity: 0.8; }
+      100% { transform: scale(0); opacity: 0; }
+    }
+
+    .tile.fall {
+      animation: fallDown 0.35s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+    }
+
+    @keyframes fallDown {
+      0% { transform: translateY(-40px); opacity: 0; }
+      100% { transform: translateY(0); opacity: 1; }
+    }
+
+    .tile.hint {
+      animation: hintBounce 0.8s infinite alternate ease-in-out;
+    }
+
+    @keyframes hintBounce {
+      0% { transform: scale(1); filter: brightness(1); }
+      100% { transform: scale(1.1); filter: brightness(1.3); }
+    }
+
+    /* Floating Score Popup */
+    .score-popup {
+      position: absolute;
+      font-weight: 800;
+      color: #FFD034;
+      text-shadow: 0 3px 0 #000, 0 0 10px rgba(255,208,52,0.8);
+      pointer-events: none;
+      z-index: 50;
+      animation: floatAndFade 0.9s ease-out forwards;
+      font-size: 1.4rem;
+    }
+
+    @keyframes floatAndFade {
+      0% { opacity: 1; transform: translateY(0) scale(0.8); }
+      50% { transform: translateY(-30px) scale(1.2); }
+      100% { opacity: 0; transform: translateY(-50px) scale(1); }
+    }
+
+    /* Special Candy Sparkle */
+    .sparkle-ring {
+      position: absolute;
+      inset: -2px;
+      border-radius: 16px;
+      border: 2px dashed rgba(255,255,255,0.8);
+      animation: rotateRing 4s linear infinite;
+      pointer-events: none;
+    }
+
+    @keyframes rotateRing {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+  </style>
+</head>
+<body class="min-h-screen text-white flex flex-col items-center justify-between p-2 sm:p-4 relative">
+
+  <!-- Background Animated Bubbles -->
+  <div id="bgBubbles" class="fixed inset-0 pointer-events-none overflow-hidden z-0"></div>
+
+  <!-- HEADER / NAVIGATION -->
+  <header class="w-full max-w-xl flex items-center justify-between z-10 my-1 px-2">
+    <!-- Game Title -->
+    <div class="flex items-center gap-2">
+      <div class="w-10 h-10 rounded-2xl bg-gradient-to-tr from-candyPink to-candyPurple flex items-center justify-center shadow-candy border-2 border-white/50 text-xl text-yellow-300">
+        <i class="fa-solid fa-candy-cane"></i>
+      </div>
+      <div>
+        <h1 class="font-title text-xl sm:text-2xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-yellow-300 via-pink-400 to-cyan-300 drop-shadow-md">
+          Sweet Match
+        </h1>
+        <p class="text-[10px] sm:text-xs text-pink-200 font-semibold tracking-wider uppercase -mt-1">Mania Quest</p>
+      </div>
+    </div>
+
+    <!-- Action Buttons (Sound, Instructions, Restart) -->
+    <div class="flex items-center gap-2">
+      <button id="soundToggleBtn" onclick="toggleAudio()" class="btn-candy w-9 h-9 rounded-xl bg-purple-600 border-2 border-purple-300 text-white flex items-center justify-center text-sm">
+        <i id="soundIcon" class="fa-solid fa-volume-high"></i>
+      </button>
+      <button onclick="openModal('instructionsModal')" class="btn-candy w-9 h-9 rounded-xl bg-blue-600 border-2 border-blue-300 text-white flex items-center justify-center text-sm">
+        <i class="fa-solid fa-circle-question"></i>
+      </button>
+      <button onclick="openModal('levelModal')" class="btn-candy w-9 h-9 rounded-xl bg-pink-600 border-2 border-pink-300 text-white flex items-center justify-center text-sm">
+        <i class="fa-solid fa-trophy"></i>
+      </button>
+    </div>
+  </header>
+
+  <!-- MAIN GAME WRAPPER -->
+  <main class="w-full max-w-xl flex flex-col items-center gap-3 z-10">
+
+    <!-- MODE TABS -->
+    <div class="w-full candy-glass rounded-2xl p-1.5 flex justify-between gap-1 text-xs sm:text-sm font-bold">
+      <button id="modeTargetBtn" onclick="switchGameMode('target')" class="flex-1 py-1.5 rounded-xl transition-all duration-200 bg-candyPink text-white shadow-candy">
+        <i class="fa-solid fa-bullseye mr-1"></i> Target
+      </button>
+      <button id="modeTimedBtn" onclick="switchGameMode('timed')" class="flex-1 py-1.5 rounded-xl transition-all duration-200 bg-white/10 text-pink-200 hover:bg-white/20">
+        <i class="fa-solid fa-stopwatch mr-1"></i> Timed
+      </button>
+      <button id="modeEndlessBtn" onclick="switchGameMode('endless')" class="flex-1 py-1.5 rounded-xl transition-all duration-200 bg-white/10 text-pink-200 hover:bg-white/20">
+        <i class="fa-solid fa-infinity mr-1"></i> Relax
+      </button>
+    </div>
+
+    <!-- STATS DASHBOARD -->
+    <div class="w-full candy-glass rounded-2xl p-3 grid grid-cols-3 gap-2 text-center items-center">
+      <!-- Target / Objective -->
+      <div class="flex flex-col items-center">
+        <span class="text-[10px] sm:text-xs text-pink-200 font-semibold uppercase tracking-wider">Goal</span>
+        <span id="targetDisplay" class="font-bold text-base sm:text-lg text-yellow-300 drop-shadow">1,000 pts</span>
+      </div>
+
+      <!-- Current Score & Star Progress -->
+      <div class="flex flex-col items-center">
+        <span class="text-[10px] sm:text-xs text-pink-200 font-semibold uppercase tracking-wider">Score</span>
+        <span id="scoreDisplay" class="font-title text-xl sm:text-2xl font-black text-white drop-shadow-md">0</span>
+        <!-- Stars Bar -->
+        <div class="flex gap-1 mt-0.5">
+          <i id="star1" class="fa-solid fa-star text-xs text-gray-500 transition-colors duration-300"></i>
+          <i id="star2" class="fa-solid fa-star text-xs text-gray-500 transition-colors duration-300"></i>
+          <i id="star3" class="fa-solid fa-star text-xs text-gray-500 transition-colors duration-300"></i>
+        </div>
+      </div>
+
+      <!-- Moves / Time Remaining -->
+      <div class="flex flex-col items-center">
+        <span id="counterLabel" class="text-[10px] sm:text-xs text-pink-200 font-semibold uppercase tracking-wider">Moves Left</span>
+        <span id="counterDisplay" class="font-title text-xl sm:text-2xl font-black text-cyan-300 drop-shadow">25</span>
+      </div>
+    </div>
+
+    <!-- TARGET PROGRESS BAR -->
+    <div class="w-full bg-black/30 h-3 rounded-full overflow-hidden p-0.5 border border-white/20 relative">
+      <div id="progressBar" class="h-full bg-gradient-to-r from-yellow-400 via-pink-500 to-cyan-400 rounded-full transition-all duration-300" style="width: 0%;"></div>
+    </div>
+
+    <!-- GAME BOARD CONTAINER -->
+    <div class="relative w-full flex justify-center items-center">
+      <div id="board" class="relative"></div>
+
+      <!-- Overlay Banner for Special Announcements -->
+      <div id="announcementBanner" class="absolute inset-0 flex items-center justify-center pointer-events-none opacity-0 transition-all duration-300 z-30">
+        <span id="announcementText" class="font-title text-3xl sm:text-4xl font-black text-yellow-300 drop-shadow-[0_5px_5px_rgba(0,0,0,0.8)] scale-50 transition-transform duration-300">
+          SWEET COMBO!
+        </span>
+      </div>
+    </div>
+
+    <!-- BOOSTERS / POWER-UPS BAR -->
+    <div class="w-full candy-glass rounded-2xl p-2.5 flex items-center justify-around gap-2">
+      <!-- Lollipop Hammer -->
+      <button id="boosterHammer" onclick="useBooster('hammer')" class="btn-candy flex-1 py-1.5 px-2 rounded-xl bg-gradient-to-b from-pink-500 to-purple-600 border border-pink-300 flex flex-col items-center justify-center text-white">
+        <i class="fa-solid fa-hammer text-base text-yellow-300 mb-0.5"></i>
+        <span class="text-[10px] font-bold">Hammer</span>
+        <span id="qtyHammer" class="text-[9px] bg-black/40 px-1.5 rounded-full mt-0.5">x2</span>
+      </button>
+
+      <!-- Color Bomb -->
+      <button id="boosterColorBomb" onclick="useBooster('colorBomb')" class="btn-candy flex-1 py-1.5 px-2 rounded-xl bg-gradient-to-b from-yellow-400 to-orange-500 border border-yellow-200 flex flex-col items-center justify-center text-white">
+        <i class="fa-solid fa-bowling-ball text-base text-purple-900 mb-0.5"></i>
+        <span class="text-[10px] font-bold">Color Bomb</span>
+        <span id="qtyColorBomb" class="text-[9px] bg-black/40 px-1.5 rounded-full mt-0.5">x1</span>
+      </button>
+
+      <!-- Board Shuffle -->
+      <button id="boosterShuffle" onclick="useBooster('shuffle')" class="btn-candy flex-1 py-1.5 px-2 rounded-xl bg-gradient-to-b from-cyan-400 to-blue-600 border border-cyan-200 flex flex-col items-center justify-center text-white">
+        <i class="fa-solid fa-shuffle text-base text-white mb-0.5"></i>
+        <span class="text-[10px] font-bold">Shuffle</span>
+        <span id="qtyShuffle" class="text-[9px] bg-black/40 px-1.5 rounded-full mt-0.5">x3</span>
+      </button>
+
+      <!-- Free Hand / Extra Moves -->
+      <button id="boosterExtra" onclick="useBooster('extra')" class="btn-candy flex-1 py-1.5 px-2 rounded-xl bg-gradient-to-b from-green-400 to-emerald-600 border border-green-200 flex flex-col items-center justify-center text-white">
+        <i class="fa-solid fa-plus-circle text-base text-yellow-200 mb-0.5"></i>
+        <span id="extraLabel" class="text-[10px] font-bold">+5 Moves</span>
+        <span id="qtyExtra" class="text-[9px] bg-black/40 px-1.5 rounded-full mt-0.5">x2</span>
+      </button>
+
+      <!-- Hint Button -->
+      <button id="hintBtn" onclick="giveHint()" class="btn-candy w-11 h-11 rounded-xl bg-gradient-to-b from-amber-400 to-amber-600 border border-yellow-200 flex flex-col items-center justify-center text-white">
+        <i class="fa-solid fa-lightbulb text-sm text-yellow-100"></i>
+        <span class="text-[9px] font-bold">Hint</span>
+      </button>
+    </div>
+
+  </main>
+
+  <!-- FOOTER STATS & HIGHSCORE -->
+  <footer class="w-full max-w-xl text-center text-xs text-pink-200/80 my-2 z-10 flex justify-between items-center px-3">
+    <div>
+      Best Score: <span id="highScoreDisplay" class="font-bold text-yellow-300">0</span>
+    </div>
+    <div class="text-[10px] opacity-75">
+      Made with 💕 Candy Kingdom Engine
+    </div>
+  </footer>
+
+  <!-- MODALS CONTAINER -->
+
+  <!-- INSTRUCTIONS MODAL -->
+  <div id="instructionsModal" class="fixed inset-0 z-50 bg-black/70 backdrop-blur-md flex items-center justify-center p-4 hidden">
+    <div class="candy-glass rounded-3xl max-w-md w-full p-6 text-white space-y-4 border-2 border-white/40 relative">
+      <button onclick="closeModal('instructionsModal')" class="absolute top-4 right-4 text-gray-300 hover:text-white text-xl">
+        <i class="fa-solid fa-xmark"></i>
+      </button>
+      <div class="flex items-center gap-3">
+        <div class="w-10 h-10 rounded-full bg-candyPink flex items-center justify-center text-lg">
+          <i class="fa-solid fa-candy-cane"></i>
+        </div>
+        <h2 class="font-title text-2xl font-bold text-yellow-300">How to Play</h2>
+      </div>
+      <div class="text-xs sm:text-sm space-y-2 text-pink-100 leading-relaxed max-h-80 overflow-y-auto pr-1">
+        <p>🍬 <strong>Swap & Match:</strong> Match 3 or more candies of the same color in a row or column to pop them!</p>
+        <p>⚡ <strong>Line Blaster (4-Match):</strong> Clears an entire row or column when matched.</p>
+        <p>🌈 <strong>Rainbow Bomb (5-Match):</strong> Match 5 in a row to get a Rainbow Bomb. Swap it with any candy to explode ALL candies of that color!</p>
+        <p>🔨 <strong>Boosters:</strong> Use the Hammer to crush single tiles, Shuffle to reset the board, or Color Bomb to delete a color!</p>
+        <p>🎯 <strong>Modes:</strong> Complete the target before running out of moves, race the clock in Timed Rush, or relax in Endless Mode.</p>
+      </div>
+      <button onclick="closeModal('instructionsModal')" class="w-full py-2.5 rounded-xl bg-candyPink font-bold text-white shadow-candy btn-candy text-sm">
+        Got it! Let's Play
+      </button>
+    </div>
+  </div>
+
+  <!-- LEVEL & MODES SELECTOR MODAL -->
+  <div id="levelModal" class="fixed inset-0 z-50 bg-black/70 backdrop-blur-md flex items-center justify-center p-4 hidden">
+    <div class="candy-glass rounded-3xl max-w-md w-full p-6 text-white space-y-4 border-2 border-white/40 relative">
+      <button onclick="closeModal('levelModal')" class="absolute top-4 right-4 text-gray-300 hover:text-white text-xl">
+        <i class="fa-solid fa-xmark"></i>
+      </button>
+      <div class="flex items-center gap-3">
+        <i class="fa-solid fa-trophy text-2xl text-yellow-300"></i>
+        <h2 class="font-title text-2xl font-bold text-yellow-300">Select Quest Level</h2>
+      </div>
+
+      <div class="grid grid-cols-3 gap-3 my-4">
+        <button onclick="startLevel(1)" class="p-3 rounded-2xl bg-white/10 border border-white/20 hover:bg-candyPink/80 transition-all text-center">
+          <div class="font-bold text-base text-yellow-300">Level 1</div>
+          <div class="text-[10px] text-pink-200 mt-1">Goal: 800 pts</div>
+          <div class="text-[10px] text-cyan-300">25 Moves</div>
+        </button>
+        <button onclick="startLevel(2)" class="p-3 rounded-2xl bg-white/10 border border-white/20 hover:bg-candyPink/80 transition-all text-center">
+          <div class="font-bold text-base text-yellow-300">Level 2</div>
+          <div class="text-[10px] text-pink-200 mt-1">Goal: 1,500 pts</div>
+          <div class="text-[10px] text-cyan-300">22 Moves</div>
+        </button>
+        <button onclick="startLevel(3)" class="p-3 rounded-2xl bg-white/10 border border-white/20 hover:bg-candyPink/80 transition-all text-center">
+          <div class="font-bold text-base text-yellow-300">Level 3</div>
+          <div class="text-[10px] text-pink-200 mt-1">Goal: 2,500 pts</div>
+          <div class="text-[10px] text-cyan-300">20 Moves</div>
+        </button>
+        <button onclick="startLevel(4)" class="p-3 rounded-2xl bg-white/10 border border-white/20 hover:bg-candyPink/80 transition-all text-center">
+          <div class="font-bold text-base text-yellow-300">Level 4</div>
+          <div class="text-[10px] text-pink-200 mt-1">Goal: 4,000 pts</div>
+          <div class="text-[10px] text-cyan-300">18 Moves</div>
+        </button>
+        <button onclick="startLevel(5)" class="p-3 rounded-2xl bg-white/10 border border-white/20 hover:bg-candyPink/80 transition-all text-center">
+          <div class="font-bold text-base text-yellow-300">Level 5</div>
+          <div class="text-[10px] text-pink-200 mt-1">Goal: 6,000 pts</div>
+          <div class="text-[10px] text-cyan-300">15 Moves</div>
+        </button>
+        <button onclick="startLevel(6)" class="p-3 rounded-2xl bg-white/10 border border-white/20 hover:bg-candyPink/80 transition-all text-center">
+          <div class="font-bold text-base text-yellow-300">Level 6</div>
+          <div class="text-[10px] text-pink-200 mt-1">Goal: 10,000 pts</div>
+          <div class="text-[10px] text-cyan-300">15 Moves</div>
+        </button>
+      </div>
+
+      <button onclick="closeModal('levelModal')" class="w-full py-2.5 rounded-xl bg-purple-600 font-bold text-white shadow-candy btn-candy text-sm">
+        Close
+      </button>
+    </div>
+  </div>
+
+  <!-- GAME OVER / WIN MODAL -->
+  <div id="endGameModal" class="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-4 hidden">
+    <div class="candy-glass rounded-3xl max-w-sm w-full p-6 text-center text-white space-y-4 border-2 border-white/40 relative">
+      <div id="modalIcon" class="w-20 h-20 rounded-full bg-gradient-to-tr from-yellow-400 to-orange-500 mx-auto flex items-center justify-center text-4xl text-white shadow-glow">
+        <i class="fa-solid fa-crown"></i>
+      </div>
+
+      <h2 id="modalTitle" class="font-title text-3xl font-bold text-yellow-300">LEVEL COMPLETE!</h2>
+      <p id="modalSubtitle" class="text-sm text-pink-100">You crushed all the target candies!</p>
+
+      <!-- Final Stars Display -->
+      <div id="modalStars" class="flex justify-center gap-2 text-2xl text-yellow-300 my-2">
+        <i class="fa-solid fa-star"></i>
+        <i class="fa-solid fa-star"></i>
+        <i class="fa-solid fa-star"></i>
+      </div>
+
+      <div class="bg-black/30 rounded-xl p-3 space-y-1 text-sm border border-white/10">
+        <div class="flex justify-between text-pink-200">
+          <span>Final Score:</span>
+          <span id="modalFinalScore" class="font-bold text-white">0</span>
+        </div>
+        <div class="flex justify-between text-pink-200">
+          <span>High Score:</span>
+          <span id="modalHighScore" class="font-bold text-yellow-300">0</span>
+        </div>
+      </div>
+
+      <div class="flex gap-2 pt-2">
+        <button onclick="restartCurrentLevel()" class="flex-1 py-3 rounded-xl bg-purple-600 font-bold text-white shadow-candy btn-candy text-sm">
+          <i class="fa-solid fa-rotate-right mr-1"></i> Retry
+        </button>
+        <button id="modalNextBtn" onclick="nextLevel()" class="flex-1 py-3 rounded-xl bg-candyPink font-bold text-white shadow-candy btn-candy text-sm">
+          Next <i class="fa-solid fa-arrow-right ml-1"></i>
+        </button>
+      </div>
+    </div>
+  </div>
+
+
+  <!-- SCRIPT LOGIC -->
+  <script>
+    /* ==========================================
+       CANDY ENGINE & GAME STATE
+       ========================================== */
+    const BOARD_SIZE = 8;
+    
+    // Candy Types Definition with SVGs/Styling
+    const CANDY_TYPES = [
+      { id: 0, name: 'Red Lollipop', color: '#FF3B30', bgGrad: 'from-red-400 to-red-600', icon: 'fa-solid fa-candy-cane' },
+      { id: 1, name: 'Blue Gummy', color: '#007AFF', bgGrad: 'from-blue-400 to-blue-600', icon: 'fa-solid fa-cookie' },
+      { id: 2, name: 'Green Jelly', color: '#34C759', bgGrad: 'from-green-400 to-emerald-600', icon: 'fa-solid fa-apple-whole' },
+      { id: 3, name: 'Yellow Lemon', color: '#FFCC00', bgGrad: 'from-yellow-300 to-amber-500', icon: 'fa-solid fa-lemon' },
+      { id: 4, name: 'Orange Candy', color: '#FF9500', bgGrad: 'from-orange-400 to-orange-600', icon: 'fa-solid fa-shapes' },
+      { id: 5, name: 'Purple Grape', color: '#AF52DE', bgGrad: 'from-purple-400 to-purple-600', icon: 'fa-solid fa-gem' }
+    ];
+
+    // Special Candies
+    const SPECIAL_LINE_BLASTER = 'line_blaster'; // 4-match
+    const SPECIAL_RAINBOW_BOMB = 'rainbow_bomb'; // 5-match
+
+    // Game State
+    let board = [];
+    let score = 0;
+    let currentMode = 'target'; // 'target', 'timed', 'endless'
+    let currentLevel = 1;
+    let targetScore = 1000;
+    let movesLeft = 25;
+    let timeRemaining = 60;
+    let gameTimer = null;
+    let isProcessing = false;
+    let selectedTile = null;
+    let activeBooster = null; // 'hammer', 'colorBomb'
+
+    // Booster Quantities
+    let boosters = {
+      hammer: 2,
+      colorBomb: 1,
+      shuffle: 3,
+      extra: 2
+    };
+
+    // Audio & Sound Synthesis (Web Audio API)
+    let audioCtx = null;
+    let soundMuted = false;
+
+    // Touch Handling Variables
+    let touchStartX = 0;
+    let touchStartY = 0;
+    let touchStartTile = null;
+
+    /* ==========================================
+       AUDIO SYNTHESIZER (No External Assets)
+       ========================================== */
+    function initAudio() {
+      if (!audioCtx) {
+        audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      }
+    }
+
+    function playSound(type) {
+      if (soundMuted) return;
+      initAudio();
+      if (!audioCtx) return;
+
+      const osc = audioCtx.createOscillator();
+      const gain = audioCtx.createGain();
+      osc.connect(gain);
+      gain.connect(audioCtx.destination);
+
+      const now = audioCtx.currentTime;
+
+      if (type === 'swap') {
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(300, now);
+        osc.frequency.exponentialRampToValueAtTime(500, now + 0.1);
+        gain.gain.setValueAtTime(0.3, now);
+        gain.gain.exponentialRampToValueAtTime(0.01, now + 0.1);
+        osc.start(now);
+        osc.stop(now + 0.1);
+      } else if (type === 'match') {
+        osc.type = 'triangle';
+        osc.frequency.setValueAtTime(400, now);
+        osc.frequency.exponentialRampToValueAtTime(800, now + 0.2);
+        gain.gain.setValueAtTime(0.4, now);
+        gain.gain.exponentialRampToValueAtTime(0.01, now + 0.2);
+        osc.start(now);
+        osc.stop(now + 0.2);
+      } else if (type === 'rainbow') {
+        osc.type = 'sawtooth';
+        osc.frequency.setValueAtTime(200, now);
+        osc.frequency.linearRampToValueAtTime(1200, now + 0.5);
+        gain.gain.setValueAtTime(0.5, now);
+        gain.gain.exponentialRampToValueAtTime(0.01, now + 0.5);
+        osc.start(now);
+        osc.stop(now + 0.5);
+      } else if (type === 'win') {
+        const notes = [400, 500, 600, 800];
+        notes.forEach((freq, idx) => {
+          const oscN = audioCtx.createOscillator();
+          const gainN = audioCtx.createGain();
+          oscN.connect(gainN);
+          gainN.connect(audioCtx.destination);
+          oscN.frequency.setValueAtTime(freq, now + idx * 0.1);
+          gainN.gain.setValueAtTime(0.3, now + idx * 0.1);
+          gainN.gain.exponentialRampToValueAtTime(0.01, now + idx * 0.1 + 0.2);
+          oscN.start(now + idx * 0.1);
+          oscN.stop(now + idx * 0.1 + 0.2);
+        });
+      } else if (type === 'hammer') {
+        osc.type = 'square';
+        osc.frequency.setValueAtTime(150, now);
+        osc.frequency.exponentialRampToValueAtTime(40, now + 0.2);
+        gain.gain.setValueAtTime(0.5, now);
+        gain.gain.exponentialRampToValueAtTime(0.01, now + 0.2);
+        osc.start(now);
+        osc.stop(now + 0.2);
+      }
+    }
+
+    function toggleAudio() {
+      soundMuted = !soundMuted;
+      const icon = document.getElementById('soundIcon');
+      const btn = document.getElementById('soundToggleBtn');
+      if (soundMuted) {
+        icon.className = 'fa-solid fa-volume-xmark';
+        btn.classList.add('opacity-50');
+      } else {
+        icon.className = 'fa-solid fa-volume-high';
+        btn.classList.remove('opacity-50');
+        playSound('swap');
+      }
+    }
+
+    /* ==========================================
+       INITIALIZATION & BOARD GENERATION
+       ========================================== */
+    window.addEventListener('DOMContentLoaded', () => {
+      createBackgroundBubbles();
+      loadHighScore();
+      startLevel(1);
+    });
+
+    function createBackgroundBubbles() {
+      const container = document.getElementById('bgBubbles');
+      for (let i = 0; i < 15; i++) {
+        const bubble = document.createElement('div');
+        bubble.className = 'bg-bubble';
+        const size = Math.random() * 40 + 20;
+        bubble.style.width = `${size}px`;
+        bubble.style.height = `${size}px`;
+        bubble.style.left = `${Math.random() * 100}%`;
+        bubble.style.animationDelay = `${Math.random() * 8}s`;
+        bubble.style.animationDuration = `${Math.random() * 6 + 8}s`;
+        container.appendChild(bubble);
+      }
+    }
+
+    function initBoard() {
+      const boardElem = document.getElementById('board');
+      boardElem.innerHTML = '';
+      board = [];
+
+      for (let r = 0; r < BOARD_SIZE; r++) {
+        board[r] = [];
+        for (let c = 0; c < BOARD_SIZE; c++) {
+          let randomCandy;
+          // Ensure no initial 3-matches on spawn
+          do {
+            randomCandy = Math.floor(Math.random() * CANDY_TYPES.length);
+          } while (
+            (r >= 2 && board[r-1][c]?.type === randomCandy && board[r-2][c]?.type === randomCandy) ||
+            (c >= 2 && board[r][c-1]?.type === randomCandy && board[r][c-2]?.type === randomCandy)
+          );
+
+          board[r][c] = {
+            row: r,
+            col: c,
+            type: randomCandy,
+            special: null // SPECIAL_LINE_BLASTER, SPECIAL_RAINBOW_BOMB
+          };
+        }
+      }
+      renderBoard();
+    }
+
+    function renderBoard() {
+      const boardElem = document.getElementById('board');
+      boardElem.innerHTML = '';
+
+      for (let r = 0; r < BOARD_SIZE; r++) {
+        for (let c = 0; c < BOARD_SIZE; c++) {
+          const tileData = board[r][c];
+          const tileElem = document.createElement('div');
+          tileElem.dataset.row = r;
+          tileElem.dataset.col = c;
+          tileElem.className = `tile bg-gradient-to-tr ${CANDY_TYPES[tileData.type].bgGrad}`;
+
+          // Inner Icon / SVG
+          let iconHtml = `<i class="${CANDY_TYPES[tileData.type].icon} text-2xl sm:text-3xl text-white drop-shadow-md pointer-events-none"></i>`;
+
+          // Handle Special Candy Rendering
+          if (tileData.special === SPECIAL_LINE_BLASTER) {
+            iconHtml = `<div class="sparkle-ring"></div>
+                        <i class="fa-solid fa-bolt text-2xl sm:text-3xl text-yellow-200 animate-pulse drop-shadow-lg"></i>`;
+            tileElem.classList.add('border-2', 'border-yellow-300');
+          } else if (tileData.special === SPECIAL_RAINBOW_BOMB) {
+            iconHtml = `<i class="fa-solid fa-star text-2xl sm:text-3xl text-white animate-spin drop-shadow-lg"></i>`;
+            tileElem.className = `tile bg-gradient-to-tr from-pink-500 via-purple-500 to-cyan-400 border-2 border-white`;
+          }
+
+          tileElem.innerHTML = iconHtml;
+
+          // Event Listeners (Click & Touch Swipe)
+          tileElem.addEventListener('click', () => handleTileClick(r, c));
+          tileElem.addEventListener('touchstart', (e) => handleTouchStart(e, r, c), {passive: true});
+          tileElem.addEventListener('touchend', (e) => handleTouchEnd(e, r, c), {passive: true});
+
+          boardElem.appendChild(tileElem);
+        }
+      }
+    }
+
+    /* ==========================================
+       USER INTERACTION & SWAPPING LOGIC
+       ========================================== */
+    function handleTileClick(r, c) {
+      if (isProcessing) return;
+
+      // Booster Active Checks
+      if (activeBooster === 'hammer') {
+        executeHammer(r, c);
+        return;
+      }
+
+      if (!selectedTile) {
+        selectedTile = { r, c };
+        getTileElem(r, c).classList.add('selected');
+        playSound('swap');
+      } else {
+        const prevR = selectedTile.r;
+        const prevC = selectedTile.c;
+        getTileElem(prevR, prevC).classList.remove('selected');
+
+        if (prevR === r && prevC === c) {
+          selectedTile = null;
+          return;
+        }
+
+        // Check if adjacent
+        const isAdjacent = (Math.abs(prevR - r) + Math.abs(prevC - c)) === 1;
+
+        if (isAdjacent) {
+          attemptSwap(prevR, prevC, r, c);
+        } else {
+          selectedTile = { r, c };
+          getTileElem(r, c).classList.add('selected');
+          playSound('swap');
+        }
+      }
+    }
+
+    function handleTouchStart(e, r, c) {
+      if (isProcessing) return;
+      touchStartX = e.touches[0].clientX;
+      touchStartY = e.touches[0].clientY;
+      touchStartTile = { r, c };
+    }
+
+    function handleTouchEnd(e, r, c) {
+      if (isProcessing || !touchStartTile) return;
+      const touchEndX = e.changedTouches[0].clientX;
+      const touchEndY = e.changedTouches[0].clientY;
+
+      const diffX = touchEndX - touchStartX;
+      const diffY = touchEndY - touchStartY;
+
+      if (Math.max(Math.abs(diffX), Math.abs(diffY)) > 30) {
+        let targetR = r;
+        let targetC = c;
+
+        if (Math.abs(diffX) > Math.abs(diffY)) {
+          targetC = diffX > 0 ? c + 1 : c - 1;
+        } else {
+          targetR = diffY > 0 ? r + 1 : r - 1;
+        }
+
+        if (targetR >= 0 && targetR < BOARD_SIZE && targetC >= 0 && targetC < BOARD_SIZE) {
+          attemptSwap(r, c, targetR, targetC);
+        }
+      }
+      touchStartTile = null;
+    }
+
+    async function attemptSwap(r1, c1, r2, c2) {
+      isProcessing = true;
+      selectedTile = null;
+
+      // Handle Rainbow Bomb Special Swaps
+      if (board[r1][c1].special === SPECIAL_RAINBOW_BOMB || board[r2][c2].special === SPECIAL_RAINBOW_BOMB) {
+        playSound('rainbow');
+        decrementMoves();
+        const targetColor = board[r1][c1].special === SPECIAL_RAINBOW_BOMB ? board[r2][c2].type : board[r1][c1].type;
+        await triggerRainbowBomb(targetColor);
+        await processBoardCascades();
+        isProcessing = false;
+        return;
+      }
+
+      // Visual Swap
+      swapTilesData(r1, c1, r2, c2);
+      renderBoard();
+      playSound('swap');
+
+      // Check for Matches
+      const matches = findMatches();
+
+      if (matches.length > 0) {
+        decrementMoves();
+        await processBoardCascades();
+      } else {
+        // Reverse swap if no matches formed
+        await new Promise(res => setTimeout(res, 200));
+        swapTilesData(r1, c1, r2, c2);
+        renderBoard();
+      }
+
+      isProcessing = false;
+    }
+
+    function swapTilesData(r1, c1, r2, c2) {
+      const temp = board[r1][c1];
+      board[r1][c1] = board[r2][c2];
+      board[r2][c2] = temp;
+      board[r1][c1].row = r1;
+      board[r1][c1].col = c1;
+      board[r2][c2].row = r2;
+      board[r2][c2].col = c2;
+    }
+
+    /* ==========================================
+       MATCH DETECTION & CASCADING LOGIC
+       ========================================== */
+    function findMatches() {
+      const matchedSet = new Set();
+      const matchGroups = [];
+
+      // Horizontal Matches
+      for (let r = 0; r < BOARD_SIZE; r++) {
+        let matchLength = 1;
+        for (let c = 0; c < BOARD_SIZE; c++) {
+          const checkNext = c < BOARD_SIZE - 1 && board[r][c].type === board[r][c+1].type;
+          if (checkNext) {
+            matchLength++;
+          } else {
+            if (matchLength >= 3) {
+              const group = [];
+              for (let k = 0; k < matchLength; k++) {
+                matchedSet.add(`${r},${c - k}`);
+                group.push({ r, c: c - k });
+              }
+              matchGroups.push(group);
+            }
+            matchLength = 1;
+          }
+        }
+      }
+
+      // Vertical Matches
+      for (let c = 0; c < BOARD_SIZE; c++) {
+        let matchLength = 1;
+        for (let r = 0; r < BOARD_SIZE; r++) {
+          const checkNext = r < BOARD_SIZE - 1 && board[r][c].type === board[r+1][c].type;
+          if (checkNext) {
+            matchLength++;
+          } else {
+            if (matchLength >= 3) {
+              const group = [];
+              for (let k = 0; k < matchLength; k++) {
+                matchedSet.add(`${r - k},${c}`);
+                group.push({ r: r - k, c });
+              }
+              matchGroups.push(group);
+            }
+            matchLength = 1;
+          }
+        }
+      }
+
+      return Array.from(matchedSet).map(coord => {
+        const [r, c] = coord.split(',').map(Number);
+        return { r, c };
+      });
+    }
+
+    async function processBoardCascades() {
+      let comboMultiplier = 1;
+
+      while (true) {
+        const matches = findMatches();
+        if (matches.length === 0) break;
+
+        playSound('match');
+
+        // Check for 4 or 5 length matches to spawn special candies
+        detectAndSpawnSpecials(matches);
+
+        // Animate Match Pop
+        matches.forEach(({ r, c }) => {
+          const elem = getTileElem(r, c);
+          if (elem) elem.classList.add('match-pop');
+          
+          // Check if clearing Line Blaster
+          if (board[r][c].special === SPECIAL_LINE_BLASTER) {
+            clearLineBlaster(r, c);
+          }
+        });
+
+        // Add Score & Floating Popup
+        const addedScore = matches.length * 30 * comboMultiplier;
+        addScore(addedScore, matches[0].r, matches[0].c);
+
+        if (comboMultiplier > 1) {
+          showAnnouncement(`COMBO x${comboMultiplier}!`);
+        }
+
+        await new Promise(res => setTimeout(res, 300));
+
+        // Clear matched tiles
+        matches.forEach(({ r, c }) => {
+          board[r][c] = null;
+        });
+
+        // Apply Gravity / Cascading
+        applyGravity();
+        refillBoard();
+        renderBoard();
+
+        await new Promise(res => setTimeout(res, 350));
+        comboMultiplier++;
+      }
+
+      checkGameEndCondition();
+    }
+
+    function detectAndSpawnSpecials(matches) {
+      // Group matches to see length
+      if (matches.length >= 5) {
+        const center = matches[Math.floor(matches.length / 2)];
+        board[center.r][center.c].special = SPECIAL_RAINBOW_BOMB;
+        showAnnouncement("RAINBOW BOMB!");
+      } else if (matches.length === 4) {
+        const center = matches[1];
+        board[center.r][center.c].special = SPECIAL_LINE_BLASTER;
+        showAnnouncement("LINE BLASTER!");
+      }
+    }
+
+    function clearLineBlaster(r, c) {
+      // Clear entire row & col
+      for (let i = 0; i < BOARD_SIZE; i++) {
+        if (board[r][i]) board[r][i] = null;
+        if (board[i][c]) board[i][c] = null;
+      }
+    }
+
+    async function triggerRainbowBomb(targetType) {
+      let clearedCount = 0;
+      for (let r = 0; r < BOARD_SIZE; r++) {
+        for (let c = 0; c < BOARD_SIZE; c++) {
+          if (board[r][c] && board[r][c].type === targetType) {
+            board[r][c] = null;
+            clearedCount++;
+          }
+        }
+      }
+      addScore(clearedCount * 50, 4, 4);
+      applyGravity();
+      refillBoard();
+      renderBoard();
+    }
+
+    function applyGravity() {
+      for (let c = 0; c < BOARD_SIZE; c++) {
+        let emptyRow = BOARD_SIZE - 1;
+        for (let r = BOARD_SIZE - 1; r >= 0; r--) {
+          if (board[r][c] !== null) {
+            if (r !== emptyRow) {
+              board[emptyRow][c] = board[r][c];
+              board[emptyRow][c].row = emptyRow;
+              board[r][c] = null;
+            }
+            emptyRow--;
+          }
+        }
+      }
+    }
+
+    function refillBoard() {
+      for (let r = 0; r < BOARD_SIZE; r++) {
+        for (let c = 0; c < BOARD_SIZE; c++) {
+          if (board[r][c] === null) {
+            board[r][c] = {
+              row: r,
+              col: c,
+              type: Math.floor(Math.random() * CANDY_TYPES.length),
+              special: null
+            };
+          }
+        }
+      }
+    }
+
+    /* ==========================================
+       SCORE & GAME CONDITION MANAGEMENT
+       ========================================== */
+    function addScore(amount, r, c) {
+      score += amount;
+      document.getElementById('scoreDisplay').innerText = score.toLocaleString();
+      updateProgressBar();
+      createScorePopup(amount, r, c);
+      saveHighScore();
+    }
+
+    function createScorePopup(amount, r, c) {
+      const tileElem = getTileElem(r, c);
+      if (!tileElem) return;
+
+      const rect = tileElem.getBoundingClientRect();
+      const popup = document.createElement('div');
+      popup.className = 'score-popup';
+      popup.innerText = `+${amount}`;
+      popup.style.left = `${rect.left + rect.width / 4}px`;
+      popup.style.top = `${rect.top}px`;
+
+      document.body.appendChild(popup);
+      setTimeout(() => popup.remove(), 900);
+    }
+
+    function updateProgressBar() {
+      const pct = Math.min(100, Math.round((score / targetScore) * 100));
+      document.getElementById('progressBar').style.width = `${pct}%`;
+
+      // Update Stars
+      const s1 = document.getElementById('star1');
+      const s2 = document.getElementById('star2');
+      const s3 = document.getElementById('star3');
+
+      s1.className = pct >= 33 ? 'fa-solid fa-star text-xs text-yellow-300 drop-shadow' : 'fa-solid fa-star text-xs text-gray-500';
+      s2.className = pct >= 66 ? 'fa-solid fa-star text-xs text-yellow-300 drop-shadow' : 'fa-solid fa-star text-xs text-gray-500';
+      s3.className = pct >= 100 ? 'fa-solid fa-star text-xs text-yellow-300 drop-shadow' : 'fa-solid fa-star text-xs text-gray-500';
+    }
+
+    function decrementMoves() {
+      if (currentMode === 'target') {
+        movesLeft--;
+        document.getElementById('counterDisplay').innerText = movesLeft;
+      }
+    }
+
+    function checkGameEndCondition() {
+      if (currentMode === 'target') {
+        if (score >= targetScore) {
+          triggerWinGame();
+        } else if (movesLeft <= 0) {
+          triggerLoseGame();
+        }
+      }
+    }
+
+    function triggerWinGame() {
+      playSound('win');
+      confetti({ particleCount: 100, spread: 70, origin: { y: 0.6 } });
+
+      document.getElementById('modalTitle').innerText = "SWEET VICTORY!";
+      document.getElementById('modalSubtitle').innerText = `You crushed Level ${currentLevel} in style!`;
+      document.getElementById('modalIcon').className = "w-20 h-20 rounded-full bg-gradient-to-tr from-yellow-400 to-green-400 mx-auto flex items-center justify-center text-4xl text-white shadow-glow";
+      document.getElementById('modalFinalScore').innerText = score.toLocaleString();
+      document.getElementById('modalHighScore').innerText = getHighScore().toLocaleString();
+      document.getElementById('modalNextBtn').classList.remove('hidden');
+
+      openModal('endGameModal');
+    }
+
+    function triggerLoseGame() {
+      document.getElementById('modalTitle').innerText = "OUT OF MOVES!";
+      document.getElementById('modalSubtitle').innerText = "Don't give up! Give it another shot!";
+      document.getElementById('modalIcon').className = "w-20 h-20 rounded-full bg-gradient-to-tr from-red-500 to-purple-600 mx-auto flex items-center justify-center text-4xl text-white shadow-glow";
+      document.getElementById('modalFinalScore').innerText = score.toLocaleString();
+      document.getElementById('modalHighScore').innerText = getHighScore().toLocaleString();
+      document.getElementById('modalNextBtn').classList.add('hidden');
+
+      openModal('endGameModal');
+    }
+
+    /* ==========================================
+       POWER-UPS & BOOSTERS
+       ========================================== */
+    function useBooster(type) {
+      if (isProcessing) return;
+
+      if (type === 'shuffle') {
+        if (boosters.shuffle <= 0) return;
+        boosters.shuffle--;
+        document.getElementById('qtyShuffle').innerText = `x${boosters.shuffle}`;
+        initBoard();
+        showAnnouncement("BOARD SHUFFLED!");
+      } else if (type === 'extra') {
+        if (boosters.extra <= 0) return;
+        boosters.extra--;
+        document.getElementById('qtyExtra').innerText = `x${boosters.extra}`;
+        if (currentMode === 'timed') {
+          timeRemaining += 15;
+          document.getElementById('counterDisplay').innerText = `${timeRemaining}s`;
+        } else {
+          movesLeft += 5;
+          document.getElementById('counterDisplay').innerText = movesLeft;
+        }
+        showAnnouncement("+5 EXTRA MOVES!");
+      } else if (type === 'hammer') {
+        if (boosters.hammer <= 0) return;
+        activeBooster = activeBooster === 'hammer' ? null : 'hammer';
+        updateBoosterUI();
+      } else if (type === 'colorBomb') {
+        if (boosters.colorBomb <= 0) return;
+        // Turn random candy into rainbow bomb
+        boosters.colorBomb--;
+        document.getElementById('qtyColorBomb').innerText = `x${boosters.colorBomb}`;
+        board[3][3].special = SPECIAL_RAINBOW_BOMB;
+        renderBoard();
+        showAnnouncement("COLOR BOMB CREATED!");
+      }
+    }
+
+    function updateBoosterUI() {
+      const hammerBtn = document.getElementById('boosterHammer');
+      if (activeBooster === 'hammer') {
+        hammerBtn.classList.add('ring-4', 'ring-yellow-300', 'scale-105');
+      } else {
+        hammerBtn.classList.remove('ring-4', 'ring-yellow-300', 'scale-105');
+      }
+    }
+
+    function executeHammer(r, c) {
+      playSound('hammer');
+      boosters.hammer--;
+      document.getElementById('qtyHammer').innerText = `x${boosters.hammer}`;
+      activeBooster = null;
+      updateBoosterUI();
+
+      board[r][c] = null;
+      applyGravity();
+      refillBoard();
+      renderBoard();
+      addScore(100, r, c);
+    }
+
+    function giveHint() {
+      if (isProcessing) return;
+      
+      // Find valid swap
+      for (let r = 0; r < BOARD_SIZE; r++) {
+        for (let c = 0; c < BOARD_SIZE; c++) {
+          // Check right swap
+          if (c < BOARD_SIZE - 1) {
+            swapTilesData(r, c, r, c + 1);
+            const matches = findMatches();
+            swapTilesData(r, c, r, c + 1);
+            if (matches.length > 0) {
+              highlightHint(r, c, r, c + 1);
+              return;
+            }
+          }
+          // Check down swap
+          if (r < BOARD_SIZE - 1) {
+            swapTilesData(r, c, r + 1, c);
+            const matches = findMatches();
+            swapTilesData(r, c, r + 1, c);
+            if (matches.length > 0) {
+              highlightHint(r, c, r + 1, c);
+              return;
+            }
+          }
+        }
+      }
+      showAnnouncement("NO MATCHES! SHUFFLING...");
+      initBoard();
+    }
+
+    function highlightHint(r1, c1, r2, c2) {
+      const t1 = getTileElem(r1, c1);
+      const t2 = getTileElem(r2, c2);
+      if (t1) t1.classList.add('hint');
+      if (t2) t2.classList.add('hint');
+
+      setTimeout(() => {
+        if (t1) t1.classList.remove('hint');
+        if (t2) t2.classList.remove('hint');
+      }, 2000);
+    }
+
+    /* ==========================================
+       MODES & LEVEL CONTROLS
+       ========================================== */
+    function switchGameMode(mode) {
+      currentMode = mode;
+
+      const btnTarget = document.getElementById('modeTargetBtn');
+      const btnTimed = document.getElementById('modeTimedBtn');
+      const btnEndless = document.getElementById('modeEndlessBtn');
+
+      [btnTarget, btnTimed, btnEndless].forEach(b => {
+        b.className = "flex-1 py-1.5 rounded-xl transition-all duration-200 bg-white/10 text-pink-200 hover:bg-white/20";
+      });
+
+      if (mode === 'target') {
+        btnTarget.className = "flex-1 py-1.5 rounded-xl transition-all duration-200 bg-candyPink text-white shadow-candy";
+        document.getElementById('counterLabel').innerText = "Moves Left";
+        document.getElementById('extraLabel').innerText = "+5 Moves";
+      } else if (mode === 'timed') {
+        btnTimed.className = "flex-1 py-1.5 rounded-xl transition-all duration-200 bg-candyPink text-white shadow-candy";
+        document.getElementById('counterLabel').innerText = "Time Left";
+        document.getElementById('extraLabel').innerText = "+15 Sec";
+      } else {
+        btnEndless.className = "flex-1 py-1.5 rounded-xl transition-all duration-200 bg-candyPink text-white shadow-candy";
+        document.getElementById('counterLabel').innerText = "Moves";
+        document.getElementById('targetDisplay').innerText = "∞ Relax";
+      }
+
+      startLevel(currentLevel);
+    }
+
+    function startLevel(lvl) {
+      currentLevel = lvl;
+      score = 0;
+      selectedTile = null;
+      isProcessing = false;
+      clearInterval(gameTimer);
+
+      if (currentMode === 'target') {
+        targetScore = lvl * 800;
+        movesLeft = Math.max(12, 28 - lvl * 2);
+        document.getElementById('targetDisplay').innerText = `${targetScore.toLocaleString()} pts`;
+        document.getElementById('counterDisplay').innerText = movesLeft;
+      } else if (currentMode === 'timed') {
+        targetScore = lvl * 1000;
+        timeRemaining = 60;
+        document.getElementById('targetDisplay').innerText = `${targetScore.toLocaleString()} pts`;
+        document.getElementById('counterDisplay').innerText = `${timeRemaining}s`;
+
+        gameTimer = setInterval(() => {
+          timeRemaining--;
+          document.getElementById('counterDisplay').innerText = `${timeRemaining}s`;
+          if (timeRemaining <= 0) {
+            clearInterval(gameTimer);
+            if (score >= targetScore) triggerWinGame();
+            else triggerLoseGame();
+          }
+        }, 1000);
+      } else {
+        document.getElementById('counterDisplay').innerText = "∞";
+      }
+
+      document.getElementById('scoreDisplay').innerText = "0";
+      updateProgressBar();
+      closeModal('levelModal');
+      closeModal('endGameModal');
+      initBoard();
+    }
+
+    function restartCurrentLevel() {
+      startLevel(currentLevel);
+    }
+
+    function nextLevel() {
+      startLevel(currentLevel + 1);
+    }
+
+    /* ==========================================
+       UTILITY HELPERS & STORAGE
+       ========================================== */
+    function getTileElem(r, c) {
+      return document.querySelector(`.tile[data-row="${r}"][data-col="${c}"]`);
+    }
+
+    function showAnnouncement(text) {
+      const banner = document.getElementById('announcementBanner');
+      const textElem = document.getElementById('announcementText');
+      textElem.innerText = text;
+      banner.classList.remove('opacity-0');
+      textElem.classList.remove('scale-50');
+      textElem.classList.add('scale-100');
+
+      setTimeout(() => {
+        banner.classList.add('opacity-0');
+        textElem.classList.remove('scale-100');
+        textElem.classList.add('scale-50');
+      }, 1000);
+    }
+
+    function openModal(id) {
+      document.getElementById(id).classList.remove('hidden');
+    }
+
+    function closeModal(id) {
+      document.getElementById(id).classList.add('hidden');
+    }
+
+    function getHighScore() {
+      return parseInt(localStorage.getItem('candy_high_score') || '0');
+    }
+
+    function saveHighScore() {
+      if (score > getHighScore()) {
+        localStorage.setItem('candy_high_score', score);
+        loadHighScore();
+      }
+    }
+
+    function loadHighScore() {
+      document.getElementById('highScoreDisplay').innerText = getHighScore().toLocaleString();
+    }
+  </script>
+</body>
+</html>
 
